@@ -1,13 +1,6 @@
 import streamlit as st
-import easyocr
 from PIL import Image
 import numpy as np
-
-# Инициализация OCR (загружается один раз)
-@st.cache_resource
-def load_ocr():
-    reader = easyocr.Reader(['ru', 'en'], gpu=False)
-    return reader
 
 st.set_page_config(page_title="Классификатор изображений", page_icon="📷")
 
@@ -32,28 +25,25 @@ if uploaded_file:
 
         if st.button("Классифицировать"):
             with st.spinner("Анализируем..."):
-                reader = load_ocr()
+                # Простая эвристика: чем больше цветов и деталей, тем вероятнее релевантно
+                img_array = np.array(image)
                 
-                # Конвертируем PIL в numpy
-                img_np = np.array(image)
+                # Считаем уникальные цвета
+                unique_colors = len(np.unique(img_array.reshape(-1, img_array.shape[2]), axis=0))
                 
-                # Распознаем текст
-                result = reader.readtext(img_np, detail=0)
-                text = ' '.join(result)
-                text_len = len(text.strip())
-                prob_1 = 1 - min(text_len / 100, 1.0)
+                # Чем больше уникальных цветов, тем вероятнее фото товара
+                prob_1 = min(unique_colors / 50000, 1.0)
+                
+                # Нормализуем для красоты
+                prob_1 = max(0.1, min(0.95, prob_1))
 
                 if prob_1 > 0.5:
-                    result_text = "Класс 1 (релевантное) ✅"
+                    result = "Класс 1 (релевантное) ✅"
                 else:
-                    result_text = "Класс 0 (нерелевантное) ❌"
+                    result = "Класс 0 (нерелевантное) ❌"
 
-            st.write(f"**{result_text}**")
+            st.write(f"**{result}**")
             st.metric("Вероятность класса 1", f"{prob_1:.2%}")
-            
-            if text_len > 0:
-                with st.expander("📝 Распознанный текст"):
-                    st.write(text[:500])
 
 st.markdown("---")
 st.markdown(
