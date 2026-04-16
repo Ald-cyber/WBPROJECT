@@ -1,20 +1,13 @@
-import subprocess
-import sys
-
-# Установка Tesseract (только если не установлен)
-try:
-    subprocess.run(['tesseract', '--version'], capture_output=True, check=True)
-except:
-    subprocess.run(['apt-get', 'update'], check=True)
-    subprocess.run(['apt-get', 'install', '-y', 'tesseract-ocr', 'tesseract-ocr-rus'], check=True)
-    print("Tesseract установлен!")
-
 import streamlit as st
-import pytesseract
+import easyocr
 from PIL import Image
-import os
-# Путь к Tesseract
-pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+import numpy as np
+
+# Инициализация OCR (загружается один раз)
+@st.cache_resource
+def load_ocr():
+    reader = easyocr.Reader(['ru', 'en'], gpu=False)
+    return reader
 
 st.set_page_config(page_title="Классификатор изображений", page_icon="📷")
 
@@ -39,20 +32,29 @@ if uploaded_file:
 
         if st.button("Классифицировать"):
             with st.spinner("Анализируем..."):
-                text = pytesseract.image_to_string(image, lang='rus+eng')
+                reader = load_ocr()
+                
+                # Конвертируем PIL в numpy
+                img_np = np.array(image)
+                
+                # Распознаем текст
+                result = reader.readtext(img_np, detail=0)
+                text = ' '.join(result)
                 text_len = len(text.strip())
                 prob_1 = 1 - min(text_len / 100, 1.0)
 
-                # Простая классификация
                 if prob_1 > 0.5:
-                    result = "Класс 1 (релевантное) ✅"
+                    result_text = "Класс 1 (релевантное) ✅"
                 else:
-                    result = "Класс 0 (нерелевантное) ❌"
+                    result_text = "Класс 0 (нерелевантное) ❌"
 
-            st.write(f"**{result}**")
+            st.write(f"**{result_text}**")
             st.metric("Вероятность класса 1", f"{prob_1:.2%}")
+            
+            if text_len > 0:
+                with st.expander("📝 Распознанный текст"):
+                    st.write(text[:500])
 
-# Подпись внизу
 st.markdown("---")
 st.markdown(
     """
