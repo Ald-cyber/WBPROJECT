@@ -1,8 +1,18 @@
+import subprocess
+import sys
+
+# Установка Tesseract (только если не установлен)
+try:
+    subprocess.run(['tesseract', '--version'], capture_output=True, check=True)
+except:
+    subprocess.run(['apt-get', 'update'], check=True)
+    subprocess.run(['apt-get', 'install', '-y', 'tesseract-ocr', 'tesseract-ocr-rus'], check=True)
+    print("Tesseract установлен!")
+
 import streamlit as st
 import pytesseract
 from PIL import Image
 import os
-
 # Путь к Tesseract
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
