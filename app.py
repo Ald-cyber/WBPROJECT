@@ -1,67 +1,54 @@
 import streamlit as st
-import torch
-import clip
+import pytesseract
 from PIL import Image
+import os
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
+# Путь к Tesseract
+pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
+st.set_page_config(page_title="Классификатор изображений", page_icon="📷")
 
-@st.cache_resource
-def load_model():
-    model, preprocess = clip.load("ViT-B/32", device=device)
-    model.eval()
-    return model, preprocess
-
-
-st.title("Классификатор изображений")
+st.title("📷 Классификатор изображений")
 st.write("Загрузите фото для классификации")
 
 uploaded_file = st.file_uploader("Выберите картинку...", type=["jpg", "jpeg", "png"])
 
 if uploaded_file:
-    image = Image.open(uploaded_file).convert("RGB")
-    st.image(image, caption="Ваше фото", use_container_width=True)
+    st.write(f"**{uploaded_file.name}**")
+    image = Image.open(uploaded_file)
 
-    if st.button("Классифицировать"):
-        model, preprocess = load_model()
+    st.write("## Фото загружено")
 
-        with st.spinner("Анализируем..."):
-            image_input = preprocess(image).unsqueeze(0).to(device)
+    col1, col2 = st.columns(2)
 
-            # Варианты описаний изображений
-            descriptions = [
-                "кресло-качалка",
-                "кот на кресле",
-                "кошка",
-                "стул",
-                "диван",
-                "животное"
-            ]
+    with col1:
+        st.image(image, caption="Ваше фото", use_container_width=True)
 
-            text = torch.cat([clip.tokenize(f"это {desc}") for desc in descriptions]).to(device)
+    with col2:
+        st.write("### Результат анализа")
 
-            with torch.no_grad():
-                image_features = model.encode_image(image_input)
-                text_features = model.encode_text(text)
+        if st.button("Классифицировать"):
+            with st.spinner("Анализируем..."):
+                text = pytesseract.image_to_string(image, lang='rus+eng')
+                text_len = len(text.strip())
+                prob_1 = 1 - min(text_len / 100, 1.0)
 
-                image_features = image_features / image_features.norm(dim=-1, keepdim=True)
-                text_features = text_features / text_features.norm(dim=-1, keepdim=True)
+                # Простая классификация
+                if prob_1 > 0.5:
+                    result = "Класс 1 (релевантное) ✅"
+                else:
+                    result = "Класс 0 (нерелевантное) ❌"
 
-                similarity = (image_features @ text_features.T).squeeze(0)
-                probs = similarity.softmax(dim=0).cpu().numpy()
+            st.write(f"**{result}**")
+            st.metric("Вероятность класса 1", f"{prob_1:.2%}")
 
-            best_idx = probs.argmax()
-            best_desc = descriptions[best_idx]
-            best_prob = probs[best_idx]
-
-        st.success(f"### 🖼️ Это **{best_desc}**")
-        st.metric("Вероятность", f"{best_prob:.1%}")
-
-        # Показываем топ-3 варианта
-        with st.expander("Другие варианты"):
-            for i in range(len(descriptions)):
-                if i != best_idx:
-                    st.write(f"- {descriptions[i]}: {probs[i]:.1%}")
-
+# Подпись внизу
 st.markdown("---")
-st.markdown("<div style='text-align: center;'>🚀 Сайт сделан командой SlavickTeam</div>", unsafe_allow_html=True)
+st.markdown(
+    """
+    <div style='text-align: center; color: gray; padding: 20px;'>
+        🚀 Сайт сделан командой <b>SlavickTeam</b>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
