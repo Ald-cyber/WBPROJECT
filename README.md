@@ -1,7 +1,3 @@
-# Классификатор изображений
+# Тренировочное собеседование
 
 ## Запуск
-
-```bash
-pip install -r requirements.txt
-streamlit run app.py
