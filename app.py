@@ -1,56 +1,65 @@
 import streamlit as st
-from PIL import Image
-import numpy as np
+import ollama
 
-st.set_page_config(page_title="Классификатор изображений", page_icon="📷")
+MODEL_NAME = "llama3" 
 
-st.title("📷 Классификатор изображений")
-st.write("Загрузите фото для классификации")
+st.set_page_config(page_title="AI Интервьюер", page_icon="💼", layout="centered")
+st.title("💼 Онлайн-собеседование с AI")
+st.write("Локальный симулятор технического интервью на базе Llama 3")
 
-uploaded_file = st.file_uploader("Выберите картинку...", type=["jpg", "jpeg", "png"])
+with st.sidebar:
+    st.header("⚙️ Настройки вакансии")
+    profession = st.text_input("Какую должность тестируем?", value="Python Developer")
 
-if uploaded_file:
-    st.write(f"**{uploaded_file.name}**")
-    image = Image.open(uploaded_file)
+    system_prompt = (
+        f"Ты — опытный IT-интервьюер. Проводишь собеседование на позицию: {profession}. "
+        f"Задавай строго по ОДНОМУ техническому вопросу за раз. Дождись ответа кандидата. "
+        f"Не пиши реплики за пользователя. Будь краток и вежлив. Веди диалог на русском языке."
+    )
+    
+    st.markdown("---")
+    finish_interview = st.button("🏁 Завершить и получить оценку", type="primary")
+if "messages" not in st.session_state:
+    st.session_state.messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "assistant", "content": f"Привет! Я твой интервьюер на сегодня. Давай начнем собеседование на позицию {profession}. Расскажи, пожалуйста, какие основные технологии ты используешь в работе?"}
+    ]
+for message in st.session_state.messages:
+    if message["role"] != "system": # Скрываем от пользователя системную роль
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
 
-    st.write("## Фото загружено")
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.image(image, caption="Ваше фото", use_container_width=True)
-
-    with col2:
-        st.write("### Результат анализа")
-
-        if st.button("Классифицировать"):
-            with st.spinner("Анализируем..."):
-                # Простая эвристика: чем больше цветов и деталей, тем вероятнее релевантно
-                img_array = np.array(image)
-                
-                # Считаем уникальные цвета
-                unique_colors = len(np.unique(img_array.reshape(-1, img_array.shape[2]), axis=0))
-                
-                # Чем больше уникальных цветов, тем вероятнее фото товара
-                prob_1 = min(unique_colors / 50000, 1.0)
-                
-                # Нормализуем для красоты
-                prob_1 = max(0.1, min(0.95, prob_1))
-
-                if prob_1 > 0.5:
-                    result = "Класс 1 (релевантное) ✅"
-                else:
-                    result = "Класс 0 (нерелевантное) ❌"
-
-            st.write(f"**{result}**")
-            st.metric("Вероятность класса 1", f"{prob_1:.2%}")
-
-st.markdown("---")
-st.markdown(
-    """
-    <div style='text-align: center; color: gray; padding: 20px;'>
-        🚀 Сайт сделан командой <b>SlavickTeam</b>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+if not finish_interview:
+    if user_input := st.chat_input("Напишите ваш ответ здесь..."):
+        with st.chat_message("user"):
+            st.markdown(user_input)
+        st.session_state.messages.append({"role": "user", "content": user_input})
+        with st.chat_message("assistant"):
+            with st.spinner("Интервьюер слушает и думает..."):
+                try:
+                    response = ollama.chat(model=MODEL_NAME, messages=st.session_state.messages)
+                    ai_response = response['message']['content']
+                    st.markdown(ai_response)
+                    st.session_state.messages.append({"role": "assistant", "content": ai_response})
+                except Exception as e:
+                    st.error(f"Ошибка подключения к Ollama: {e}. Убедитесь, что приложение Ollama запущено.")
+else:
+    st.markdown("---")
+    st.subheader("📊 Анализ вашего собеседования")
+    
+    with st.spinner("Принимающий анализирует ваши ответы..."):
+        eval_messages = st.session_state.messages.copy()
+        eval_messages.append({
+            "role": "user", 
+            "content": "Собеседование окончено. Сделай подробный разбор моих ответов. Укажи, где я ответил правильно, а где ошибся. Напиши правильные варианты для ошибок и поставь итоговую оценку от 1 до 10."
+        })
+        
+        try:
+            response = ollama.chat(model=MODEL_NAME, messages=eval_messages)
+            st.info(response['message']['content'])
+        except Exception as e:
+            st.error(f"Не удалось получить оценку: {e}")
+        
+    if st.button("🔄 Начать новое собеседование"):
+        del st.session_state.messages
+        st.rerun()
